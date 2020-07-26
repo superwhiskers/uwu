@@ -36,7 +36,7 @@ static char *call_init_or_destructor_function(init_or_destructor_function f) {
 	return f();
 }
 
-typedef void *(*call_function) (char *, void **, int *);
+typedef void *(*call_function) (char *, void **, int);
 
 static void *call_call_function(call_function f, char *c, void **v, int i) {
 	return f(c, v, i);
@@ -120,7 +120,7 @@ var (
 
 // LoadPlugin creates a fresh Plugin from the filesystem
 func LoadPlugin(path string) (p *Plugin, err error) {
-	p = Plugin{}
+	p = &Plugin{}
 	p.path, err = filepath.Abs(path)
 	if err != nil {
 		return
