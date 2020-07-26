@@ -120,6 +120,7 @@ var (
 
 // LoadPlugin creates a fresh Plugin from the filesystem
 func LoadPlugin(path string) (p *Plugin, err error) {
+	p = Plugin{}
 	p.path, err = filepath.Abs(path)
 	if err != nil {
 		return
