@@ -22,7 +22,6 @@ import (
 )
 
 /*
-#cgo linux CFLAGS: -g
 #cgo linux LDFLAGS: -ldl
 
 #include <stdlib.h>
