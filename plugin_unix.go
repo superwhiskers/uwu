@@ -111,11 +111,11 @@ type Plugin struct {
 }
 
 var (
-	initFuncName    = []byte("init")
-	callFuncName    = []byte("call")
-	destroyFuncName = []byte("destroy")
+	initFuncName    = "init"
+	callFuncName    = "call"
+	destroyFuncName = "destroy"
 
-	emptyString = []byte("")
+	emptyString = []byte{0}
 )
 
 // LoadPlugin creates a fresh Plugin from the filesystem
@@ -139,8 +139,7 @@ func (p *Plugin) Load() (err error) {
 
 	var cErr *C.char
 
-	pointerPath := []byte(p.path)
-	p.handle = C.open_plugin((*C.char)(unsafe.Pointer(&pointerPath)), &cErr)
+	p.handle = C.open_plugin(C.CString(p.path), &cErr)
 	if p.handle == 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
 		C.free(unsafe.Pointer(cErr))
@@ -156,7 +155,7 @@ func (p *Plugin) Load() (err error) {
 		}
 	}()
 
-	t := (uintptr)(C.lookup_symbol(p.handle, (*C.char)(unsafe.Pointer(&initFuncName)), &cErr))
+	t := (uintptr)(C.lookup_symbol(p.handle, C.CString(initFuncName), &cErr))
 	if t == 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
 		C.free(unsafe.Pointer(cErr))
@@ -164,7 +163,7 @@ func (p *Plugin) Load() (err error) {
 	} else {
 		p.init = (C.init_or_destructor_function)(unsafe.Pointer(t))
 	}
-	t = (uintptr)(C.lookup_symbol(p.handle, (*C.char)(unsafe.Pointer(&callFuncName)), &cErr))
+	t = (uintptr)(C.lookup_symbol(p.handle, C.CString(callFuncName), &cErr))
 	if t == 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
 		C.free(unsafe.Pointer(cErr))
@@ -172,7 +171,7 @@ func (p *Plugin) Load() (err error) {
 	} else {
 		p.call = (C.call_function)(unsafe.Pointer(t))
 	}
-	t = (uintptr)(C.lookup_symbol(p.handle, (*C.char)(unsafe.Pointer(&destroyFuncName)), &cErr))
+	t = (uintptr)(C.lookup_symbol(p.handle, C.CString(destroyFuncName), &cErr))
 	if t == 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
 		C.free(unsafe.Pointer(cErr))
