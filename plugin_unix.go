@@ -22,6 +22,7 @@ import (
 )
 
 /*
+#cgo linux CFLAGS: -g
 #cgo linux LDFLAGS: -ldl
 
 #include <stdlib.h>
@@ -146,7 +147,7 @@ func (p *Plugin) Load() (err error) {
 
 	defer func() {
 		if err != nil {
-			nErr := p.Unload()
+			nErr := p.unload_unsafe()
 			if nErr != nil {
 				err = errors.New(strings.Join([]string{"multiple errors encountered: (", nErr.Error(), ") (", err.Error(), ")"}, ""))
 			}
@@ -161,6 +162,7 @@ func (p *Plugin) Load() (err error) {
 	} else {
 		p.init = (C.init_or_destructor_function)(unsafe.Pointer(t))
 	}
+	
 	t = (uintptr)(C.lookup_symbol(p.handle, C.CString(callFuncName), &cErr))
 	if t == 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
@@ -169,6 +171,7 @@ func (p *Plugin) Load() (err error) {
 	} else {
 		p.call = (C.call_function)(unsafe.Pointer(t))
 	}
+
 	t = (uintptr)(C.lookup_symbol(p.handle, C.CString(destroyFuncName), &cErr))
 	if t == 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
@@ -179,16 +182,22 @@ func (p *Plugin) Load() (err error) {
 	}
 
 	// doesn't matter if it returns an error because this is the last statement anyways
-	err = p.Init()
+	err = p.init_unsafe()
 	return
 }
 
 // Unload unloads the plugin. if an error is returned the shared library is still unloaded from memory
-func (p *Plugin) Unload() (err error) {
+func (p *Plugin) Unload() error {
 	for !atomic.CompareAndSwapInt64(&p.calls, 0, -1) {
 		continue
 	}
+	defer atomic.StoreInt64(&p.calls, 0)
 
+	return p.unload_unsafe()
+}
+
+// unload_unsafe unloads the plugin without checking the call spinlock
+func (p *Plugin) unload_unsafe() (err error) {
 	var cErr *C.char
 
 	defer func() {
@@ -199,41 +208,61 @@ func (p *Plugin) Unload() (err error) {
 				err = errors.New(strings.Join([]string{"multiple errors encountered: (", nErr.Error(), ") (", err.Error(), ")"}, ""))
 			}
 		}
-
-		atomic.StoreInt64(&p.calls, 0)
 	}()
 
-	err = p.Destroy()
+	err = p.destroy_unsafe()
 	return
 }
 
 // Init initializes the plugin
-func (p *Plugin) Init() (err error) {
+func (p *Plugin) Init() error {
 	for !atomic.CompareAndSwapInt64(&p.calls, 0, -1) {
 		continue
 	}
 	defer atomic.StoreInt64(&p.calls, 0)
+
+	return p.init_unsafe()
+}
+
+// init_unsafe initializes the plugin without checking the call spinlock
+func (p *Plugin) init_unsafe() (err error) {
+	if *(*int)(unsafe.Pointer(&p.init)) == 0 {
+		err = errors.New("error: the init function has not been located yet")
+		return
+	}
 
 	cErr := C.call_init_or_destructor_function(p.init)
 	if int(C.strlen(cErr)) != 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
 		C.free(unsafe.Pointer(cErr))
 	}
+
 	return
 }
 
 // Destroy deinitializes the plugin
-func (p *Plugin) Destroy() (err error) {
+func (p *Plugin) Destroy() error {
 	for !atomic.CompareAndSwapInt64(&p.calls, 0, -1) {
 		continue
 	}
 	defer atomic.StoreInt64(&p.calls, 0)
+
+	return p.destroy_unsafe()
+}
+
+// destroy_unsafe deinitializes the plugin without checking the call spinlock
+func (p *Plugin) destroy_unsafe() (err error) {
+	if *(*int)(unsafe.Pointer(&p.destroy)) == 0 {
+		err = errors.New("error: the destroy function has not been located yet")
+		return
+	}
 
 	cErr := C.call_init_or_destructor_function(p.destroy)
 	if int(C.strlen(cErr)) != 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
 		C.free(unsafe.Pointer(cErr))
 	}
+
 	return
 }
 
