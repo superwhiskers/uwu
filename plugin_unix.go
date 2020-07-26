@@ -114,8 +114,6 @@ var (
 	initFuncName    = "init"
 	callFuncName    = "call"
 	destroyFuncName = "destroy"
-
-	emptyString = []byte{0}
 )
 
 // LoadPlugin creates a fresh Plugin from the filesystem
@@ -217,7 +215,7 @@ func (p *Plugin) Init() (err error) {
 	defer atomic.StoreInt64(&p.calls, 0)
 
 	cErr := C.call_init_or_destructor_function(p.init)
-	if int(C.strcmp(cErr, (*C.char)(unsafe.Pointer(&emptyString)))) == 0 {
+	if int(C.strlen(cErr)) != 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
 		C.free(unsafe.Pointer(cErr))
 	}
@@ -232,7 +230,7 @@ func (p *Plugin) Destroy() (err error) {
 	defer atomic.StoreInt64(&p.calls, 0)
 
 	cErr := C.call_init_or_destructor_function(p.destroy)
-	if int(C.strcmp(cErr, (*C.char)(unsafe.Pointer(&emptyString)))) == 0 {
+	if int(C.strlen(cErr)) != 0 {
 		err = errors.New(strings.Join([]string{"error: ", C.GoString(cErr)}, ""))
 		C.free(unsafe.Pointer(cErr))
 	}
